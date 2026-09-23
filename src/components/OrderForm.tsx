@@ -125,7 +125,7 @@ export function OrderForm({
       };
     });
 
-  const { computed, totalUsdCents, totalSdg, hasBlocked } = computeOrderTotals(
+  const { totalUsdCents, totalSdg, hasBlocked } = computeOrderTotals(
     draftLines,
     exchangeRate,
   );
