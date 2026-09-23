@@ -112,3 +112,4 @@ scripts/verify-money.mjs   # PDF number checks
 ## Note for Shamsy (what we’d do differently on the real system)
 
 See [TRIAL_NOTES.md](./TRIAL_NOTES.md).
+
