@@ -3,6 +3,15 @@
 :root {
   --background: #fafafa;
   --foreground: #18181b;
+  --band-sand-bg: #f3e0b5;
+  --band-sand-border: #c4a35a;
+  --band-sand-text: #6b4f12;
+  --band-red-bg: #fecaca;
+  --band-red-border: #dc2626;
+  --band-red-text: #7f1d1d;
+  --band-blocked-bg: #991b1b;
+  --band-blocked-border: #450a0a;
+  --band-blocked-text: #fff7f7;
 }
 
 @theme inline {
@@ -15,4 +24,62 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* Discount bands — explicit colours (not only Tailwind utilities) so sand/red/blocked always show */
+.band-none {
+  background: #ffffff;
+  border-color: #e4e4e7;
+  color: inherit;
+}
+
+.band-sand {
+  background: var(--band-sand-bg);
+  border-color: var(--band-sand-border);
+  color: var(--band-sand-text);
+}
+
+.band-red {
+  background: var(--band-red-bg);
+  border-color: var(--band-red-border);
+  color: var(--band-red-text);
+}
+
+.band-blocked {
+  background: var(--band-blocked-bg);
+  border-color: var(--band-blocked-border);
+  color: var(--band-blocked-text);
+  box-shadow: inset 0 0 0 2px #7f1d1d;
+}
+
+.band-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.band-badge-sand {
+  background: #e8c872;
+  color: #5c4310;
+}
+
+.band-badge-red {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.band-badge-blocked {
+  background: #450a0a;
+  color: #fecaca;
+  border: 1px solid #fecaca;
+}
+
+.band-badge-none {
+  background: #f4f4f5;
+  color: #52525b;
 }

@@ -40,14 +40,26 @@ type UiLine = {
 function bandClass(band: string) {
   switch (band) {
     case "sand":
-      return "bg-amber-100 border-amber-300";
+      return "band-sand";
     case "red":
-      return "bg-red-100 border-red-300";
+      return "band-red";
     case "blocked":
-      return "bg-red-200 border-red-500 ring-1 ring-red-500";
+      return "band-blocked";
     default:
-      return "bg-white border-zinc-200";
+      return "band-none";
   }
+}
+
+function BandBadge({ band }: { band: string }) {
+  const label =
+    band === "sand"
+      ? "Sand ≤3%"
+      : band === "red"
+        ? "Red ≤5%"
+        : band === "blocked"
+          ? "Blocked >5%"
+          : "No discount";
+  return <span className={`band-badge band-badge-${band}`}>{label}</span>;
 }
 
 export function OrderForm({
@@ -158,6 +170,39 @@ export function OrderForm({
         discountDollars: "0",
       },
     ]);
+  }
+
+  /** PDF worked example: sand + red + blocked on one order */
+  function loadWorkedExample() {
+    const bySku = (sku: string) =>
+      products.find((p) => p.sku === sku)?.id ?? products[0]?.id ?? "";
+    setExchangeRate(8200);
+    setRateInput("8200");
+    setOwnerApprovedProductIds(new Set());
+    setLines([
+      {
+        key: crypto.randomUUID(),
+        productId: bySku("SPF-6000-ES-PLUS"),
+        quantity: 4,
+        discountDollars: "40",
+      },
+      {
+        key: crypto.randomUUID(),
+        productId: bySku("HOPE-5.0L-B1"),
+        quantity: 2,
+        discountDollars: "70",
+      },
+      {
+        key: crypto.randomUUID(),
+        productId: bySku("HOPE-16.0LM-A1"),
+        quantity: 1,
+        discountDollars: "150",
+      },
+    ]);
+    setInfo(
+      "Worked example loaded: sand (1.94%), red (4.32%), blocked (7.25%). Save is blocked until line 3 is removed or owner-approved.",
+    );
+    setError(null);
   }
 
   function removeLine(key: string) {
@@ -318,15 +363,30 @@ export function OrderForm({
       </label>
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-zinc-800">Lines</h2>
-          <button
-            type="button"
-            onClick={addLine}
-            className="text-sm font-medium text-emerald-700"
-          >
-            + Add line
-          </button>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={loadWorkedExample}
+              className="text-sm font-medium text-amber-800 underline"
+            >
+              Load PDF example
+            </button>
+            <button
+              type="button"
+              onClick={addLine}
+              className="text-sm font-medium text-emerald-700"
+            >
+              + Add line
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 text-[11px] text-zinc-600">
+          <span className="band-badge band-badge-sand">Sand 0–3%</span>
+          <span className="band-badge band-badge-red">Red 3–5%</span>
+          <span className="band-badge band-badge-blocked">Blocked &gt;5%</span>
         </div>
 
         {lines.map((line, index) => {
@@ -348,15 +408,28 @@ export function OrderForm({
           return (
             <div
               key={line.key}
-              className={`space-y-2 rounded-xl border p-3 ${bandClass(calc?.band ?? "none")}`}
+              className={`space-y-2 rounded-xl border-2 p-3 ${bandClass(calc?.band ?? "none")}`}
             >
+              <div className="flex items-center justify-between gap-2">
+                {calc ? <BandBadge band={calc.band} /> : <span />}
+                {lines.length > 1 && (
+                  <button
+                    type="button"
+                    className="text-xs underline opacity-80"
+                    onClick={() => removeLine(line.key)}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+
               <div className="flex items-start justify-between gap-2">
                 <label className="flex-1 space-y-1">
-                  <span className="text-xs font-medium text-zinc-600">
+                  <span className="text-xs font-medium opacity-80">
                     Product
                   </span>
                   <select
-                    className="w-full rounded-md border border-zinc-300 bg-white px-2 py-2 text-sm"
+                    className="w-full rounded-md border border-black/20 bg-white px-2 py-2 text-sm text-zinc-900"
                     value={line.productId}
                     onChange={(e) =>
                       updateLine(line.key, { productId: e.target.value })
@@ -369,24 +442,15 @@ export function OrderForm({
                     ))}
                   </select>
                 </label>
-                {lines.length > 1 && (
-                  <button
-                    type="button"
-                    className="mt-5 text-xs text-zinc-500 underline"
-                    onClick={() => removeLine(line.key)}
-                  >
-                    Remove
-                  </button>
-                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <label className="space-y-1">
-                  <span className="text-xs font-medium text-zinc-600">Qty</span>
+                  <span className="text-xs font-medium opacity-80">Qty</span>
                   <input
                     type="number"
                     min={1}
-                    className="w-full rounded-md border border-zinc-300 bg-white px-2 py-2 text-sm tabular-nums"
+                    className="w-full rounded-md border border-black/20 bg-white px-2 py-2 text-sm tabular-nums text-zinc-900"
                     value={line.quantity}
                     onChange={(e) =>
                       updateLine(line.key, {
@@ -396,12 +460,12 @@ export function OrderForm({
                   />
                 </label>
                 <label className="space-y-1">
-                  <span className="text-xs font-medium text-zinc-600">
+                  <span className="text-xs font-medium opacity-80">
                     Unit price (fixed)
                   </span>
                   <input
                     readOnly
-                    className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-sm tabular-nums text-zinc-700"
+                    className="w-full rounded-md border border-black/10 bg-white/70 px-2 py-2 text-sm tabular-nums text-zinc-700"
                     value={
                       product
                         ? formatUsdFromCents(product.unit_price_cents)
@@ -412,14 +476,14 @@ export function OrderForm({
               </div>
 
               <label className="block space-y-1">
-                <span className="text-xs font-medium text-zinc-600">
+                <span className="text-xs font-medium opacity-80">
                   Discount (USD)
                 </span>
                 <input
                   type="number"
                   step="0.01"
                   min={0}
-                  className="w-full rounded-md border border-zinc-300 bg-white px-2 py-2 text-sm tabular-nums"
+                  className="w-full rounded-md border border-black/20 bg-white px-2 py-2 text-sm tabular-nums text-zinc-900"
                   value={line.discountDollars}
                   onChange={(e) =>
                     updateLine(line.key, { discountDollars: e.target.value })
@@ -428,31 +492,41 @@ export function OrderForm({
               </label>
 
               {calc && (
-                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-zinc-700">
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                   <div className="flex justify-between gap-2 col-span-2">
-                    <dt>Line value</dt>
+                    <dt className="opacity-80">Line value</dt>
                     <dd className="tabular-nums font-medium">
                       {formatUsdFromCents(calc.lineValueCents)}
                     </dd>
                   </div>
-                  <div className="flex justify-between gap-2 col-span-2">
-                    <dt>Discount %</dt>
-                    <dd className="tabular-nums font-medium">
-                      {formatBps(calc.bps)} · {calc.band}
-                      {lineApproved ? " · approved" : ""}
+                  <div className="flex justify-between gap-2 col-span-2 items-center">
+                    <dt className="opacity-80">Discount %</dt>
+                    <dd className="flex items-center gap-2 tabular-nums font-medium">
+                      {formatBps(calc.bps)}
+                      <BandBadge band={calc.band} />
                     </dd>
                   </div>
                   <div className="flex justify-between gap-2 col-span-2">
-                    <dt>Line total</dt>
+                    <dt className="opacity-80">Line total</dt>
                     <dd className="tabular-nums font-semibold">
                       {formatUsdFromCents(calc.lineTotalCents)}
                     </dd>
                   </div>
+                  {calc.band === "sand" && (
+                    <p className="col-span-2 text-xs font-medium">
+                      Sand band: discount allowed, save OK.
+                    </p>
+                  )}
+                  {calc.band === "red" && (
+                    <p className="col-span-2 text-xs font-semibold">
+                      Red band: discount allowed (3–5%), save still OK.
+                    </p>
+                  )}
                   {calc.band === "blocked" && (
                     <div className="col-span-2 space-y-2 pt-1">
-                      <p className="text-xs font-medium text-red-800">
-                        Line {index + 1} blocked (&gt;5%). Owner must approve
-                        this line before save.
+                      <p className="text-xs font-semibold">
+                        Line {index + 1} BLOCKED (&gt;5%). Cannot save until this
+                        line is removed or owner-approved.
                       </p>
                       {profile.role === "owner" && product && (
                         <button
@@ -464,8 +538,8 @@ export function OrderForm({
                           }
                           className={`w-full rounded-lg py-2 text-sm font-medium ${
                             lineApproved
-                              ? "border border-emerald-600 bg-emerald-50 text-emerald-900"
-                              : "bg-emerald-800 text-white"
+                              ? "border border-white/60 bg-white/20"
+                              : "bg-white text-red-900"
                           }`}
                         >
                           {lineApproved

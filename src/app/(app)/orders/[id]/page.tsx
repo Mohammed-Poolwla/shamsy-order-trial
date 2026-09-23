@@ -12,14 +12,26 @@ import type { Order, OrderLine } from "@/lib/types";
 function bandClass(band: string) {
   switch (band) {
     case "sand":
-      return "bg-amber-100 border-amber-300";
+      return "band-sand";
     case "red":
-      return "bg-red-100 border-red-300";
+      return "band-red";
     case "blocked":
-      return "bg-red-200 border-red-500";
+      return "band-blocked";
     default:
-      return "bg-white border-zinc-200";
+      return "band-none";
   }
+}
+
+function BandBadge({ band }: { band: string }) {
+  const label =
+    band === "sand"
+      ? "Sand ≤3%"
+      : band === "red"
+        ? "Red ≤5%"
+        : band === "blocked"
+          ? "Blocked >5%"
+          : "No discount";
+  return <span className={`band-badge band-badge-${band}`}>{label}</span>;
 }
 
 export default async function OrderDetailPage({
@@ -89,39 +101,42 @@ export default async function OrderDetailPage({
           return (
             <li
               key={line.id}
-              className={`rounded-xl border p-3 space-y-1 ${bandClass(band)}`}
+              className={`rounded-xl border-2 p-3 space-y-1 ${bandClass(band)}`}
             >
-              <p className="text-sm font-medium">
-                {line.shamsy_products?.name ?? "Product"} × {line.quantity}
-              </p>
-              <dl className="grid grid-cols-2 gap-1 text-xs text-zinc-700">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">
+                  {line.shamsy_products?.name ?? "Product"} × {line.quantity}
+                </p>
+                <BandBadge band={band} />
+              </div>
+              <dl className="grid grid-cols-2 gap-1 text-xs">
                 <div className="flex justify-between col-span-2">
-                  <dt>Unit (snapshotted)</dt>
+                  <dt className="opacity-80">Unit (snapshotted)</dt>
                   <dd className="tabular-nums">
                     {formatUsdFromCents(line.unit_price_cents)}
                   </dd>
                 </div>
                 <div className="flex justify-between col-span-2">
-                  <dt>Line value</dt>
+                  <dt className="opacity-80">Line value</dt>
                   <dd className="tabular-nums">
                     {formatUsdFromCents(line.line_value_cents)}
                   </dd>
                 </div>
                 <div className="flex justify-between col-span-2">
-                  <dt>Discount</dt>
+                  <dt className="opacity-80">Discount</dt>
                   <dd className="tabular-nums">
                     {formatUsdFromCents(line.discount_cents)} (
-                    {formatBps(line.discount_bps)}) · {band}
+                    {formatBps(line.discount_bps)})
                   </dd>
                 </div>
                 <div className="flex justify-between col-span-2">
-                  <dt>Line total</dt>
+                  <dt className="opacity-80">Line total</dt>
                   <dd className="tabular-nums font-semibold">
                     {formatUsdFromCents(line.line_total_cents)}
                   </dd>
                 </div>
                 {line.approval === "approved" && (
-                  <p className="col-span-2 text-emerald-800">
+                  <p className="col-span-2 font-medium">
                     Owner approved (&gt;5% discount)
                   </p>
                 )}
