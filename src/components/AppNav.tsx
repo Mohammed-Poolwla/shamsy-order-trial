@@ -28,7 +28,12 @@ export function AppNav({ profile }: { profile: Profile }) {
           <Link href="/orders" className="hover:text-zinc-900">
             Orders
           </Link>
-          {(profile.role === "owner" || profile.role === "adviser") && (
+          {profile.role === "owner" && (
+            <Link href="/approvals" className="hover:text-zinc-900">
+              Approvals
+            </Link>
+          )}
+          {profile.role === "adviser" && (
             <Link href="/approvals" className="hover:text-zinc-900">
               Drafts
             </Link>

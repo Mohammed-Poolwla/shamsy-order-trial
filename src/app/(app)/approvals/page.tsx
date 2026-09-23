@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { ApprovalsList } from "@/components/ApprovalsList";
 import type { Order, OrderLine, Product, Profile } from "@/lib/types";
 
+type DraftOrder = Order & { shamsy_order_lines?: OrderLine[] };
+
 export default async function ApprovalsPage() {
   const supabase = await createClient();
   const {
@@ -28,12 +30,23 @@ export default async function ApprovalsPage() {
 
   if (!profile) redirect("/login");
 
+  const role = (profile as Profile).role;
+  let visible = (drafts ?? []) as DraftOrder[];
+
+  // Owner Approvals tab: only drafts that still need a line approval
+  if (role === "owner") {
+    visible = visible.filter((d) =>
+      (d.shamsy_order_lines ?? []).some((l) => l.approval === "required"),
+    );
+  }
+
   return (
     <ApprovalsList
       profile={profile as Profile}
-      drafts={(drafts ?? []) as (Order & { shamsy_order_lines?: OrderLine[] })[]}
+      drafts={visible}
       products={(products ?? []) as Product[]}
       loadError={draftsError?.message ?? null}
+      mode={role === "owner" ? "approvals" : "drafts"}
     />
   );
 }
