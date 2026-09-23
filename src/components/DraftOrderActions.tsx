@@ -61,7 +61,7 @@ export function FinalizeDraftButton({
   if (!canFinalize) {
     return (
       <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
-        Draft only — waiting for owner to approve blocked line(s). Not a saved
+        Draft only — waiting for owner to unblock blocked line(s). Not a saved
         order yet.
       </p>
     );
@@ -69,6 +69,10 @@ export function FinalizeDraftButton({
 
   return (
     <div className="space-y-2">
+      <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
+        All blocked lines are <strong>Unblocked</strong>. Save to finalize the
+        order.
+      </p>
       <button
         type="button"
         disabled={pending}
