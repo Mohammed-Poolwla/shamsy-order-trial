@@ -10,18 +10,21 @@ export default async function ApprovalsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: drafts }, { data: products }] =
-    await Promise.all([
-      supabase.from("shamsy_profiles").select("*").eq("id", user.id).single(),
-      supabase
-        .from("shamsy_orders")
-        .select(
-          "*, shamsy_customers(name, city), shamsy_order_lines(*, shamsy_products(name, sku))",
-        )
-        .eq("status", "draft")
-        .order("created_at", { ascending: false }),
-      supabase.from("shamsy_products").select("*"),
-    ]);
+  const [
+    { data: profile },
+    { data: drafts, error: draftsError },
+    { data: products },
+  ] = await Promise.all([
+    supabase.from("shamsy_profiles").select("*").eq("id", user.id).single(),
+    supabase
+      .from("shamsy_orders")
+      .select(
+        "*, shamsy_customers(name, city), shamsy_order_lines(*, shamsy_products(name, sku))",
+      )
+      .eq("status", "draft")
+      .order("created_at", { ascending: false }),
+    supabase.from("shamsy_products").select("*"),
+  ]);
 
   if (!profile) redirect("/login");
 
@@ -30,6 +33,7 @@ export default async function ApprovalsPage() {
       profile={profile as Profile}
       drafts={(drafts ?? []) as (Order & { shamsy_order_lines?: OrderLine[] })[]}
       products={(products ?? []) as Product[]}
+      loadError={draftsError?.message ?? null}
     />
   );
 }

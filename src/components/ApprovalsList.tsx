@@ -19,9 +19,15 @@ type Props = {
   profile: Profile;
   drafts: DraftOrder[];
   products: Product[];
+  loadError?: string | null;
 };
 
-export function ApprovalsList({ profile, drafts, products }: Props) {
+export function ApprovalsList({
+  profile,
+  drafts,
+  products,
+  loadError = null,
+}: Props) {
   const router = useRouter();
   const supabase = createClient();
   const [pending, startTransition] = useTransition();
@@ -77,6 +83,12 @@ export function ApprovalsList({ profile, drafts, products }: Props) {
           in the worked example).
         </p>
       </header>
+
+      {loadError && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+          Could not load drafts: {loadError}
+        </p>
+      )}
 
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">

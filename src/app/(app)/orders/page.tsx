@@ -23,7 +23,7 @@ export default async function OrdersPage() {
       </header>
 
       {!orders?.length && (
-        <p className="text-sm text-zinc-500">No saved orders yet.</p>
+        <p className="text-sm text-zinc-500">No orders yet.</p>
       )}
 
       <ul className="space-y-2">
@@ -31,7 +31,11 @@ export default async function OrdersPage() {
           <li key={o.id}>
             <Link
               href={`/orders/${o.id}`}
-              className="block rounded-xl border border-zinc-200 bg-white p-3 hover:border-emerald-300"
+              className={`block rounded-xl border p-3 hover:border-emerald-300 ${
+                o.status === "draft"
+                  ? "border-amber-300 bg-amber-50"
+                  : "border-zinc-200 bg-white"
+              }`}
             >
               <div className="flex justify-between text-sm font-medium">
                 <span className="flex items-center gap-2">

@@ -85,10 +85,6 @@ export function OrderForm({
     String(initialRate ?? defaultRate),
   );
   const [exchangeRate, setExchangeRate] = useState(initialRate ?? defaultRate);
-  /** Owner inline approvals keyed by product id */
-  const [ownerApprovedProductIds, setOwnerApprovedProductIds] = useState<
-    Set<string>
-  >(new Set());
   const [lines, setLines] = useState<UiLine[]>(() => {
     if (initialLines?.length) {
       return initialLines.map((l, i) => ({
@@ -134,14 +130,7 @@ export function OrderForm({
     exchangeRate,
   );
 
-  const blockedUnresolved =
-    hasBlocked &&
-    !approvalId &&
-    computed.some(
-      (c, i) =>
-        c.band === "blocked" &&
-        !ownerApprovedProductIds.has(draftLines[i].productId),
-    );
+  const blockedUnresolved = hasBlocked && !approvalId;
 
   function onRateBlur() {
     const parsed = parseInt(rateInput, 10);
@@ -176,9 +165,9 @@ export function OrderForm({
   function loadWorkedExample() {
     const bySku = (sku: string) =>
       products.find((p) => p.sku === sku)?.id ?? products[0]?.id ?? "";
-    setExchangeRate(8200);
-    setRateInput("8200");
-    setOwnerApprovedProductIds(new Set());
+    const pdfRate = 8200;
+    setExchangeRate(pdfRate);
+    setRateInput(String(pdfRate));
     setLines([
       {
         key: crypto.randomUUID(),
@@ -199,10 +188,19 @@ export function OrderForm({
         discountDollars: "150",
       },
     ]);
-    setInfo(
-      "Worked example loaded: sand (1.94%), red (4.32%), blocked (7.25%). Save is blocked until line 3 is removed or owner-approved.",
-    );
-    setError(null);
+    if (pdfRate < minRate) {
+      setError(
+        `PDF example uses rate ${pdfRate.toLocaleString()}, but the owner minimum is currently ${minRate.toLocaleString()}. Save draft will fail until Settings → minimum is ≤ ${pdfRate.toLocaleString()} (PDF uses 8,000).`,
+      );
+      setInfo(
+        "Worked example loaded (sand / red / blocked). Fix the minimum rate before Save draft for approval.",
+      );
+    } else {
+      setError(null);
+      setInfo(
+        "Worked example loaded: sand (1.94%), red (4.32%), blocked (7.25%). Tap Save draft for approval — it stays a draft until the owner approves the >5% line, then Save as order.",
+      );
+    }
   }
 
   function removeLine(key: string) {
@@ -215,19 +213,6 @@ export function OrderForm({
     );
   }
 
-  function approveLine(productId: string) {
-    setOwnerApprovedProductIds((prev) => new Set(prev).add(productId));
-    setInfo("Line approved by owner. You can save once all blocked lines are approved.");
-  }
-
-  function unapproveLine(productId: string) {
-    setOwnerApprovedProductIds((prev) => {
-      const next = new Set(prev);
-      next.delete(productId);
-      return next;
-    });
-  }
-
   async function requestApproval() {
     setError(null);
     setInfo(null);
@@ -238,6 +223,12 @@ export function OrderForm({
     }
     if (draftLines.length === 0) {
       setError("Add at least one product line.");
+      return;
+    }
+    if (exchangeRate < minRate) {
+      setError(
+        `Exchange rate ${exchangeRate.toLocaleString()} is below the owner minimum ${minRate.toLocaleString()}. Lower the minimum in Settings (PDF uses 8,000) or raise this rate, then try Save draft again.`,
+      );
       return;
     }
 
@@ -262,9 +253,9 @@ export function OrderForm({
     }
 
     setInfo(
-      "Saved as DRAFT (not a final order). Owner must approve the >5% line, then Save as order.",
+      "Saved as DRAFT (not a final order). Open Drafts — owner approves the >5% line, then Save as order.",
     );
-    router.push(`/orders/${data}`);
+    router.push(`/approvals`);
     router.refresh();
   }
 
@@ -280,11 +271,14 @@ export function OrderForm({
       setError("Add at least one product line.");
       return;
     }
+    // PDF flow: any >5% line must go through draft — never save as final yet
+    if (hasBlocked && !approvalId) {
+      startTransition(() => requestApproval());
+      return;
+    }
     if (blockedUnresolved) {
       setError(
-        profile.role === "owner"
-          ? "Approve each blocked line (>5%) before saving, or remove it."
-          : "One or more lines exceed 5% discount. Remove them or request owner approval.",
+        "One or more lines exceed 5% discount. Remove them or Save draft for owner approval.",
       );
       return;
     }
@@ -296,15 +290,12 @@ export function OrderForm({
         discount_cents: l.discountCents,
       }));
 
-      const ownerIds =
-        profile.role === "owner" ? Array.from(ownerApprovedProductIds) : [];
-
       const { data, error: rpcError } = await supabase.rpc("shamsy_create_order", {
         p_customer_id: customerId,
         p_exchange_rate: exchangeRate,
         p_lines: linesPayload,
         p_approval_id: approvalId,
-        p_owner_approved_product_ids: ownerIds.length ? ownerIds : null,
+        p_owner_approved_product_ids: null,
       });
 
       if (rpcError) {
@@ -405,8 +396,6 @@ export function OrderForm({
               }
             : null;
           const calc = draft ? computeLine(draft) : null;
-          const lineApproved =
-            !!product && ownerApprovedProductIds.has(product.id);
 
           return (
             <div
@@ -531,26 +520,7 @@ export function OrderForm({
                         Line {index + 1} BLOCKED (&gt;5%). PDF: save is blocked
                         until the owner approves this line.
                       </p>
-                      {profile.role === "owner" && product && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            lineApproved
-                              ? unapproveLine(product.id)
-                              : approveLine(product.id)
-                          }
-                          className={`w-full rounded-lg py-2 text-sm font-medium ${
-                            lineApproved
-                              ? "border border-white/60 bg-white/20"
-                              : "bg-white text-red-900"
-                          }`}
-                        >
-                          {lineApproved
-                            ? "Line approved ✓ (tap to undo)"
-                            : "Approve this line"}
-                        </button>
-                      )}
-                      {profile.role === "adviser" && !approvalId && (
+                      {!approvalId && (
                         <button
                           type="button"
                           disabled={pending}
@@ -604,31 +574,33 @@ export function OrderForm({
 
       <div className="fixed inset-x-0 bottom-0 border-t border-zinc-200 bg-white/95 p-4 backdrop-blur">
         <div className="mx-auto flex max-w-lg flex-col gap-2">
-          {hasBlocked && !approvalId && profile.role === "adviser" && (
+          {hasBlocked && !approvalId && (
             <p className="text-center text-[11px] text-zinc-600">
-              Cannot save as order yet. Save a <strong>draft</strong>, owner
-              approves the &gt;5% line, then Save as order.
+              Cannot save as a final order yet. Save a <strong>draft</strong>{" "}
+              (appears under Drafts), owner approves the &gt;5% line, then Save
+              as order.
             </p>
           )}
           <div className="flex gap-2">
-            {hasBlocked && !approvalId && profile.role === "adviser" && (
+            {hasBlocked && !approvalId ? (
               <button
                 type="button"
                 onClick={() => startTransition(() => requestApproval())}
                 disabled={pending}
-                className="flex-1 rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm font-semibold text-red-950 disabled:opacity-50"
+                className="flex-1 rounded-lg bg-amber-600 px-3 py-3 text-sm font-semibold text-white disabled:opacity-50"
               >
-                Save draft for approval
+                {pending ? "Saving draft…" : "Save draft for approval"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={saveOrder}
+                disabled={pending || blockedUnresolved}
+                className="flex-1 rounded-lg bg-emerald-700 px-3 py-3 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {pending ? "Saving…" : "Save order"}
               </button>
             )}
-            <button
-              type="button"
-              onClick={saveOrder}
-              disabled={pending || blockedUnresolved}
-              className="flex-1 rounded-lg bg-emerald-700 px-3 py-3 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              {pending ? "Saving…" : "Save order"}
-            </button>
           </div>
         </div>
       </div>
