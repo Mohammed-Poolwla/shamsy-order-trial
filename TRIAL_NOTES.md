@@ -1,28 +1,40 @@
 # Trial delivery note — Shamsy order screen
 
-## What this trial proves
+## How you judge it — and why it matters
 
-1. **Arithmetic** — USD cents × locked integer rate → SDG pounds matches the PDF worked example exactly (`npm run verify:money`).
-2. **>5% cannot be bypassed** — `create_order` refuses blocked lines without an owner-approved `discount_approvals` row; RLS blocks direct `orders` / `order_lines` inserts.
-3. **History does not move** — rate and money fields are written once; there is no update path on `orders`.
-4. **Phone-first** — single-column layout, large inputs, sticky save bar.
+| What you check | Why it matters | Proven in this trial |
+|---|---|---|
+| Exact worked-example numbers | Every future report depends on correct arithmetic | $3,570 → 29,274,000 SDG; $5,490 → 45,018,000 SDG (`test:acceptance`, Load PDF example) |
+| 5% block not bypassable via server | Discount control is money control | Draft finalize blocked until owner approves line; RLS denies direct inserts |
+| Saved order unchanged when rate changes | The rule the whole administration rests on | Rate + amounts snapshotted; settings → 9,000 leaves saved order at 8,200 |
+| Cents + rate on the order | Rounding drift and moving history are the costliest bugs | Integer USD cents; integer rate; SDG stored, never re-derived |
+| Works on a phone | Advisers work on phones / weak connections | Mobile-first layout; draft/save sticky actions |
+| Note shows understanding | You want someone who thinks along | See `VALUE_ADD_ARCHITECTURAL_NOTE.md` |
+
+## What this trial proves (mechanics)
+
+1. **Arithmetic** — USD cents × locked integer rate → SDG pounds matches the PDF worked example.
+2. **>5% cannot be bypassed** — finalize refuses unapproved blocked lines; RLS blocks direct order inserts.
+3. **Draft ≠ order** — owner approves the line while status stays `draft`; **Save as order** is a second step.
+4. **History does not move** — rate and money fields written once on save; no update path for saved money.
+5. **Phone-first** — single-column layout for adviser handsets.
 
 ## What I would do differently on the real system
 
-1. **Nx monorepo** as specified (apps for web, shared `money` / domain libs, e2e). This trial is a single Next app to ship the screen in 6–8 hours.
-2. **Multi-tenant `environment_id` / `tenant_id` on every row from day one**, with RLS scoped by membership — dealers become a switch, not a rewrite.
-3. **i18n keys for every string** (English files now) so Arabic RTL is translation + layout mirror, not a rebuild.
-4. **Approval workflow as first-class order lines in `pending` status** rather than a separate JSON payload — better audit trail when advisers iterate discounts.
-5. **Idempotent save + offline queue** (IndexedDB) for 3G drops: optimistic local draft, replay `create_order` when online.
-6. **Property / acceptance tests** generated from the tech lead’s goal prompts (Playwright for the worked example; SQL tests for RLS).
-7. **Ledger foundation early** — every future receipt/conversion as origin→destination lines with snapshotted rates, even before Step 3 UI.
+1. **Nx monorepo** as specified (shared `money` / domain libs, e2e).
+2. **Multi-tenant `tenant_id` on every row** from day one — 570 dealers as a switch, not a rewrite.
+3. **i18n keys + logical CSS** so Arabic RTL is translation work.
+4. **Idempotent save + IndexedDB outbox** for 3G drops.
+5. **Ledger early** — receipts/conversions as origin→destination lines with snapshotted rates.
+6. **Transfer plan on finalize** — N × 3,000,000 SDG + remainder; exchanger daily 15M capacity warnings.
+7. **Approval bound to draft hash** so discounts cannot rise after approval without a new approval.
 
 ## Anything unclear or I’d challenge
 
-1. **Discount “above 0% and up to 3%”** — exact 0% is uncoloured; exact 3% is sand; exact 5% is red. Confirmed in code via basis-point thresholds (≤300 / ≤500). Worth locking in the brief as inclusive bounds.
-2. **SDG “cents”** — the brief says store money in cents; Sudanese pounds in the examples are whole. I store USD in cents and SDG as whole pounds derived by integer division. For the full ledger I’d confirm whether SDG needs a subunit.
-3. **Who may save after approval** — trial lets the adviser (or owner) save with a consumed approval token. In production I’d bind approval to a specific draft hash so the adviser cannot raise the discount after approval.
-4. **Minimum rate vs “day’s rate”** — Step 2 mentions a day’s rate separate from the minimum. Trial only enforces the floor; the real system should snapshot both the applied rate and the minimum that applied that day for audit.
+1. **Band bounds** — 0% uncoloured; ≤3% sand; ≤5% red; >5% blocked (basis points).
+2. **SDG subunits** — USD in cents; SDG as whole pounds from integer division until you confirm a minor unit.
+3. **Day rate vs minimum** — both configurable; applied rate on the order is always the snapshot.
+4. **Exchanger aliases before OCR** — match “Mogtaba / Mujtaba” in data before auto-reading screenshots.
 
 ## Accounts (after `npm run seed`)
 
