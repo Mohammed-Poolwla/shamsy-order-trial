@@ -88,13 +88,9 @@ Open http://localhost:3000 → sign in as adviser.
 
 ## Deploy (Vercel)
 
-Live trial (after deploy): see repo README / Vercel dashboard.
+**Live trial:** https://demo-upwork-beta.vercel.app
 
-1. Push this repo to GitHub
-2. Import in Vercel; set env vars:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-3. Redeploy after `db:apply` + `seed` on the linked Supabase project
+Env vars set on Vercel: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 ```bash
 npm run test:acceptance   # PDF arithmetic + server 5% block
