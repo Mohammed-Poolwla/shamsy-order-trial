@@ -24,8 +24,8 @@ const TRIAL_USERS = [
 export function LoginForm() {
   const router = useRouter();
   const supabase = createClient();
-  const [email, setEmail] = useState(TRIAL_USERS[0].email);
-  const [password, setPassword] = useState(TRIAL_USERS[0].password);
+  const [email, setEmail] = useState<string>(TRIAL_USERS[0].email);
+  const [password, setPassword] = useState<string>(TRIAL_USERS[0].password);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
