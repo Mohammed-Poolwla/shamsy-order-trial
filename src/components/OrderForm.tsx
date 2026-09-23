@@ -231,37 +231,40 @@ export function OrderForm({
   async function requestApproval() {
     setError(null);
     setInfo(null);
-    const payload = {
-      lines: draftLines.map((l, i) => ({
-        product_id: l.productId,
-        quantity: l.quantity,
-        discount_cents: computed[i].discountCents,
-        needs_approval: computed[i].needsApproval,
-        line_approved: false,
-      })),
-    };
 
-    const { data, error: insertError } = await supabase
-      .from("shamsy_discount_approvals")
-      .insert({
-        requested_by: profile.id,
-        customer_id: customerId,
-        exchange_rate: exchangeRate,
-        payload,
-        status: "pending",
-      })
-      .select("id")
-      .single();
+    if (!customerId) {
+      setError("Pick a dealer.");
+      return;
+    }
+    if (draftLines.length === 0) {
+      setError("Add at least one product line.");
+      return;
+    }
 
-    if (insertError) {
-      setError(insertError.message);
+    const linesPayload = draftLines.map((l) => ({
+      product_id: l.productId,
+      quantity: l.quantity,
+      discount_cents: l.discountCents,
+    }));
+
+    const { data, error: rpcError } = await supabase.rpc(
+      "shamsy_create_draft_order",
+      {
+        p_customer_id: customerId,
+        p_exchange_rate: exchangeRate,
+        p_lines: linesPayload,
+      },
+    );
+
+    if (rpcError) {
+      setError(rpcError.message);
       return;
     }
 
     setInfo(
-      `Sent to owner for approval. Sign out → owner@shamsy.trial / trial-owner-123 → Approvals → “Approve line & save order”.`,
+      "Saved as DRAFT (not a final order). Owner must approve the >5% line, then Save as order.",
     );
-    router.push("/approvals");
+    router.push(`/orders/${data}`);
     router.refresh();
   }
 
@@ -556,7 +559,7 @@ export function OrderForm({
                           }
                           className="w-full rounded-lg bg-white py-2.5 text-sm font-semibold text-red-950 disabled:opacity-50"
                         >
-                          Send to owner for approval
+                          Save draft for owner approval
                         </button>
                       )}
                     </div>
@@ -603,7 +606,8 @@ export function OrderForm({
         <div className="mx-auto flex max-w-lg flex-col gap-2">
           {hasBlocked && !approvalId && profile.role === "adviser" && (
             <p className="text-center text-[11px] text-zinc-600">
-              Save blocked until owner approves the &gt;5% line — or remove it.
+              Cannot save as order yet. Save a <strong>draft</strong>, owner
+              approves the &gt;5% line, then Save as order.
             </p>
           )}
           <div className="flex gap-2">
@@ -614,7 +618,7 @@ export function OrderForm({
                 disabled={pending}
                 className="flex-1 rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm font-semibold text-red-950 disabled:opacity-50"
               >
-                Request owner approval
+                Save draft for approval
               </button>
             )}
             <button

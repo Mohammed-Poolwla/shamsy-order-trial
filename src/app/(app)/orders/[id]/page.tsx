@@ -7,7 +7,11 @@ import {
   formatUsdFromCents,
   lineBand,
 } from "@/lib/money";
-import type { Order, OrderLine } from "@/lib/types";
+import type { Order, OrderLine, Profile } from "@/lib/types";
+import {
+  ApproveDraftLineButton,
+  FinalizeDraftButton,
+} from "@/components/DraftOrderActions";
 
 function bandClass(band: string) {
   switch (band) {
@@ -42,6 +46,18 @@ export default async function OrderDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: profile } = user
+    ? await supabase
+        .from("shamsy_profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single()
+    : { data: null };
+
   const { data: order } = await supabase
     .from("shamsy_orders")
     .select("*, shamsy_customers(name, city)")
@@ -57,26 +73,43 @@ export default async function OrderDetailPage({
     .order("created_at");
 
   const o = order as Order;
+  const orderLines = (lines ?? []) as OrderLine[];
+  const isDraft = o.status === "draft";
+  const needsApproval = orderLines.some((l) => l.approval === "required");
+  const canFinalize = isDraft && !needsApproval;
+  const isOwner = (profile as Profile | null)?.role === "owner";
 
   return (
-    <div className="mx-auto w-full max-w-lg space-y-4 px-4 py-4">
+    <div className="mx-auto w-full max-w-lg space-y-4 px-4 py-4 pb-10">
       <Link href="/orders" className="text-sm text-emerald-700">
         ← Orders
       </Link>
 
       <header className="space-y-1">
-        <h1 className="text-xl font-semibold">
-          {o.shamsy_customers?.name ?? "Order"}
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold">
+            {o.shamsy_customers?.name ?? "Order"}
+          </h1>
+          {isDraft ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+              Draft
+            </span>
+          ) : (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-900">
+              Saved
+            </span>
+          )}
+        </div>
         <p className="text-sm text-zinc-600">
-          Saved {new Date(o.created_at).toLocaleString()}. This rate is frozen
-          on the order — changing today’s settings cannot alter these amounts.
+          {isDraft
+            ? "This is a draft — not a final order. Owner can approve blocked lines here; then Save as order."
+            : `Saved ${new Date(o.created_at).toLocaleString()}. Rate is frozen on this order.`}
         </p>
       </header>
 
       <section className="rounded-xl border border-zinc-300 bg-zinc-50 p-4 space-y-2">
         <div className="flex justify-between text-sm">
-          <span>Locked exchange rate</span>
+          <span>Exchange rate</span>
           <span className="tabular-nums font-semibold">
             {o.exchange_rate.toLocaleString()} SDG/$
           </span>
@@ -95,13 +128,17 @@ export default async function OrderDetailPage({
         </div>
       </section>
 
+      {isDraft && (
+        <FinalizeDraftButton orderId={o.id} canFinalize={canFinalize} />
+      )}
+
       <ul className="space-y-2">
-        {((lines ?? []) as OrderLine[]).map((line) => {
+        {orderLines.map((line) => {
           const band = lineBand(line.discount_bps);
           return (
             <li
               key={line.id}
-              className={`rounded-xl border-2 p-3 space-y-1 ${bandClass(band)}`}
+              className={`rounded-xl border-2 p-3 space-y-2 ${bandClass(band)}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium">
@@ -117,12 +154,6 @@ export default async function OrderDetailPage({
                   </dd>
                 </div>
                 <div className="flex justify-between col-span-2">
-                  <dt className="opacity-80">Line value</dt>
-                  <dd className="tabular-nums">
-                    {formatUsdFromCents(line.line_value_cents)}
-                  </dd>
-                </div>
-                <div className="flex justify-between col-span-2">
                   <dt className="opacity-80">Discount</dt>
                   <dd className="tabular-nums">
                     {formatUsdFromCents(line.discount_cents)} (
@@ -135,12 +166,24 @@ export default async function OrderDetailPage({
                     {formatUsdFromCents(line.line_total_cents)}
                   </dd>
                 </div>
+                {line.approval === "required" && (
+                  <p className="col-span-2 font-semibold">
+                    Needs owner approval — draft only
+                  </p>
+                )}
                 {line.approval === "approved" && (
                   <p className="col-span-2 font-medium">
-                    Owner approved (&gt;5% discount)
+                    Owner approved (&gt;5%) — still draft until Save as order
                   </p>
                 )}
               </dl>
+              {isDraft && line.approval === "required" && (
+                <ApproveDraftLineButton
+                  orderId={o.id}
+                  lineId={line.id}
+                  isOwner={isOwner}
+                />
+              )}
             </li>
           );
         })}

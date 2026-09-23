@@ -34,7 +34,14 @@ export default async function OrdersPage() {
               className="block rounded-xl border border-zinc-200 bg-white p-3 hover:border-emerald-300"
             >
               <div className="flex justify-between text-sm font-medium">
-                <span>{o.shamsy_customers?.name ?? "Dealer"}</span>
+                <span className="flex items-center gap-2">
+                  {o.shamsy_customers?.name ?? "Dealer"}
+                  {o.status === "draft" && (
+                    <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                      Draft
+                    </span>
+                  )}
+                </span>
                 <span className="tabular-nums">
                   {formatUsdFromCents(o.total_usd_cents)}
                 </span>

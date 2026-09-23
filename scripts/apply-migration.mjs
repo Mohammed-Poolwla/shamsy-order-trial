@@ -1,9 +1,6 @@
 /**
  * Applies additive shamsy_* SQL to the linked Supabase Postgres.
  * Requires DATABASE_URL or SUPABASE_DB_PASSWORD in env / .env.local
- *
- * DATABASE_URL example (pooler):
- * postgresql://postgres.PROJECT_REF:PASSWORD@aws-1-us-east-1.pooler.supabase.com:6543/postgres
  */
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -48,21 +45,26 @@ if (!url) {
   console.error(
     "Set DATABASE_URL or SUPABASE_DB_PASSWORD (+ project URL) in .env.local",
   );
-  console.error(
-    "Find the DB password in Supabase → Project Settings → Database",
-  );
   process.exit(1);
 }
 
-const migration = readFileSync(
-  resolve("supabase/migrations/20260323100000_trial_order_schema.sql"),
-  "utf8",
-);
-const migration2 = readFileSync(
-  resolve("supabase/migrations/20260323110000_day_rate_and_inline_approval.sql"),
-  "utf8",
-);
-const seed = readFileSync(resolve("supabase/seed.sql"), "utf8");
+async function runFile(client, file, { inTx } = { inTx: true }) {
+  const sql = readFileSync(resolve(file), "utf8");
+  if (inTx) {
+    await client.query("begin");
+    try {
+      await client.query(sql);
+      await client.query("commit");
+    } catch (err) {
+      await client.query("rollback");
+      throw err;
+    }
+  } else {
+    // Enum ADD VALUE cannot be used in the same transaction on some PG versions
+    await client.query(sql);
+  }
+  console.log("Applied", file);
+}
 
 const client = new pg.Client({
   connectionString: url,
@@ -71,16 +73,28 @@ const client = new pg.Client({
 
 await client.connect();
 console.log("Connected. Applying additive shamsy_* migrations...");
-await client.query("begin");
 try {
-  await client.query(migration);
-  await client.query(migration2);
-  await client.query(seed);
-  await client.query("commit");
+  await runFile(
+    client,
+    "supabase/migrations/20260323100000_trial_order_schema.sql",
+  );
+  await runFile(
+    client,
+    "supabase/migrations/20260323110000_day_rate_and_inline_approval.sql",
+  );
+  await runFile(
+    client,
+    "supabase/migrations/20260323120000_draft_enum.sql",
+    { inTx: false },
+  );
+  await runFile(
+    client,
+    "supabase/migrations/20260323120001_draft_order_approval.sql",
+  );
+  await runFile(client, "supabase/seed.sql");
   console.log("Migrations + seed applied.");
 } catch (err) {
-  await client.query("rollback");
-  console.error("Failed, rolled back:", err.message);
+  console.error("Failed:", err.message);
   process.exitCode = 1;
 } finally {
   await client.end();
