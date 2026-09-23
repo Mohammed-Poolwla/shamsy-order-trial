@@ -259,7 +259,7 @@ export function OrderForm({
     }
 
     setInfo(
-      `Approval requested (${data.id.slice(0, 8)}…). Owner must approve each blocked line, then you can save.`,
+      `Sent to owner for approval. Sign out → owner@shamsy.trial / trial-owner-123 → Approvals → “Approve line & save order”.`,
     );
     router.push("/approvals");
     router.refresh();
@@ -525,8 +525,8 @@ export function OrderForm({
                   {calc.band === "blocked" && (
                     <div className="col-span-2 space-y-2 pt-1">
                       <p className="text-xs font-semibold">
-                        Line {index + 1} BLOCKED (&gt;5%). Cannot save until this
-                        line is removed or owner-approved.
+                        Line {index + 1} BLOCKED (&gt;5%). PDF: save is blocked
+                        until the owner approves this line.
                       </p>
                       {profile.role === "owner" && product && (
                         <button
@@ -545,6 +545,18 @@ export function OrderForm({
                           {lineApproved
                             ? "Line approved ✓ (tap to undo)"
                             : "Approve this line"}
+                        </button>
+                      )}
+                      {profile.role === "adviser" && !approvalId && (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() =>
+                            startTransition(() => requestApproval())
+                          }
+                          className="w-full rounded-lg bg-white py-2.5 text-sm font-semibold text-red-950 disabled:opacity-50"
+                        >
+                          Send to owner for approval
                         </button>
                       )}
                     </div>
@@ -588,25 +600,32 @@ export function OrderForm({
       )}
 
       <div className="fixed inset-x-0 bottom-0 border-t border-zinc-200 bg-white/95 p-4 backdrop-blur">
-        <div className="mx-auto flex max-w-lg gap-2">
-          {hasBlocked && !approvalId && profile.role !== "owner" && (
+        <div className="mx-auto flex max-w-lg flex-col gap-2">
+          {hasBlocked && !approvalId && profile.role === "adviser" && (
+            <p className="text-center text-[11px] text-zinc-600">
+              Save blocked until owner approves the &gt;5% line — or remove it.
+            </p>
+          )}
+          <div className="flex gap-2">
+            {hasBlocked && !approvalId && profile.role === "adviser" && (
+              <button
+                type="button"
+                onClick={() => startTransition(() => requestApproval())}
+                disabled={pending}
+                className="flex-1 rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm font-semibold text-red-950 disabled:opacity-50"
+              >
+                Request owner approval
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => startTransition(() => requestApproval())}
-              disabled={pending}
-              className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-3 text-sm font-medium text-zinc-800 disabled:opacity-50"
+              onClick={saveOrder}
+              disabled={pending || blockedUnresolved}
+              className="flex-1 rounded-lg bg-emerald-700 px-3 py-3 text-sm font-semibold text-white disabled:opacity-40"
             >
-              Request approval
+              {pending ? "Saving…" : "Save order"}
             </button>
-          )}
-          <button
-            type="button"
-            onClick={saveOrder}
-            disabled={pending || blockedUnresolved}
-            className="flex-1 rounded-lg bg-emerald-700 px-3 py-3 text-sm font-semibold text-white disabled:opacity-40"
-          >
-            {pending ? "Saving…" : "Save order"}
-          </button>
+          </div>
         </div>
       </div>
     </div>
