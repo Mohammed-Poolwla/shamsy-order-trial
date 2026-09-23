@@ -17,16 +17,21 @@ export default async function SettingsPage() {
 
   if (profile?.role !== "owner") redirect("/orders/new");
 
-  const { data: setting } = await supabase
+  const { data: settings } = await supabase
     .from("shamsy_app_settings")
-    .select("value")
-    .eq("key", "min_exchange_rate")
-    .single();
+    .select("key, value");
 
-  const minRate =
-    typeof setting?.value === "number"
-      ? setting.value
-      : Number(setting?.value ?? 8000);
+  const map = Object.fromEntries(
+    (settings ?? []).map((s) => [
+      s.key,
+      typeof s.value === "number" ? s.value : Number(s.value),
+    ]),
+  );
 
-  return <SettingsForm minRate={minRate} />;
+  return (
+    <SettingsForm
+      minRate={map.min_exchange_rate || 8000}
+      dayRate={map.default_exchange_rate || 8200}
+    />
+  );
 }

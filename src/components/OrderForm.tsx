@@ -73,6 +73,10 @@ export function OrderForm({
     String(initialRate ?? defaultRate),
   );
   const [exchangeRate, setExchangeRate] = useState(initialRate ?? defaultRate);
+  /** Owner inline approvals keyed by product id */
+  const [ownerApprovedProductIds, setOwnerApprovedProductIds] = useState<
+    Set<string>
+  >(new Set());
   const [lines, setLines] = useState<UiLine[]>(() => {
     if (initialLines?.length) {
       return initialLines.map((l, i) => ({
@@ -118,6 +122,15 @@ export function OrderForm({
     exchangeRate,
   );
 
+  const blockedUnresolved =
+    hasBlocked &&
+    !approvalId &&
+    computed.some(
+      (c, i) =>
+        c.band === "blocked" &&
+        !ownerApprovedProductIds.has(draftLines[i].productId),
+    );
+
   function onRateBlur() {
     const parsed = parseInt(rateInput, 10);
     const { rate, refused } = clampExchangeRate(
@@ -157,6 +170,19 @@ export function OrderForm({
     );
   }
 
+  function approveLine(productId: string) {
+    setOwnerApprovedProductIds((prev) => new Set(prev).add(productId));
+    setInfo("Line approved by owner. You can save once all blocked lines are approved.");
+  }
+
+  function unapproveLine(productId: string) {
+    setOwnerApprovedProductIds((prev) => {
+      const next = new Set(prev);
+      next.delete(productId);
+      return next;
+    });
+  }
+
   async function requestApproval() {
     setError(null);
     setInfo(null);
@@ -166,6 +192,7 @@ export function OrderForm({
         quantity: l.quantity,
         discount_cents: computed[i].discountCents,
         needs_approval: computed[i].needsApproval,
+        line_approved: false,
       })),
     };
 
@@ -187,7 +214,7 @@ export function OrderForm({
     }
 
     setInfo(
-      `Approval requested (${data.id.slice(0, 8)}…). Ask the owner to approve, then save with the approval.`,
+      `Approval requested (${data.id.slice(0, 8)}…). Owner must approve each blocked line, then you can save.`,
     );
     router.push("/approvals");
     router.refresh();
@@ -205,9 +232,11 @@ export function OrderForm({
       setError("Add at least one product line.");
       return;
     }
-    if (hasBlocked && !approvalId) {
+    if (blockedUnresolved) {
       setError(
-        "One or more lines exceed 5% discount. Remove them or request owner approval before saving.",
+        profile.role === "owner"
+          ? "Approve each blocked line (>5%) before saving, or remove it."
+          : "One or more lines exceed 5% discount. Remove them or request owner approval.",
       );
       return;
     }
@@ -219,11 +248,15 @@ export function OrderForm({
         discount_cents: l.discountCents,
       }));
 
+      const ownerIds =
+        profile.role === "owner" ? Array.from(ownerApprovedProductIds) : [];
+
       const { data, error: rpcError } = await supabase.rpc("shamsy_create_order", {
         p_customer_id: customerId,
         p_exchange_rate: exchangeRate,
         p_lines: linesPayload,
         p_approval_id: approvalId,
+        p_owner_approved_product_ids: ownerIds.length ? ownerIds : null,
       });
 
       if (rpcError) {
@@ -266,7 +299,7 @@ export function OrderForm({
 
       <label className="block space-y-1">
         <span className="text-sm font-medium text-zinc-700">
-          Exchange rate (SDG per USD)
+          Today&apos;s exchange rate (SDG per USD)
         </span>
         <input
           type="number"
@@ -278,8 +311,9 @@ export function OrderForm({
           min={minRate}
         />
         <span className="text-xs text-zinc-500">
-          Minimum allowed: {minRate.toLocaleString()} (owner setting). Typing
-          below it resets to the minimum.
+          Floor: {minRate.toLocaleString()} SDG/$ (owner minimum). Typing below
+          it is refused and reset to the minimum. Day&apos;s default from
+          settings: {defaultRate.toLocaleString()}.
         </span>
       </label>
 
@@ -308,6 +342,8 @@ export function OrderForm({
               }
             : null;
           const calc = draft ? computeLine(draft) : null;
+          const lineApproved =
+            !!product && ownerApprovedProductIds.has(product.id);
 
           return (
             <div
@@ -403,6 +439,7 @@ export function OrderForm({
                     <dt>Discount %</dt>
                     <dd className="tabular-nums font-medium">
                       {formatBps(calc.bps)} · {calc.band}
+                      {lineApproved ? " · approved" : ""}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-2 col-span-2">
@@ -412,10 +449,31 @@ export function OrderForm({
                     </dd>
                   </div>
                   {calc.band === "blocked" && (
-                    <p className="col-span-2 text-xs font-medium text-red-800">
-                      Line {index + 1} is blocked (&gt;5%). Owner approval
-                      required to save with this line.
-                    </p>
+                    <div className="col-span-2 space-y-2 pt-1">
+                      <p className="text-xs font-medium text-red-800">
+                        Line {index + 1} blocked (&gt;5%). Owner must approve
+                        this line before save.
+                      </p>
+                      {profile.role === "owner" && product && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            lineApproved
+                              ? unapproveLine(product.id)
+                              : approveLine(product.id)
+                          }
+                          className={`w-full rounded-lg py-2 text-sm font-medium ${
+                            lineApproved
+                              ? "border border-emerald-600 bg-emerald-50 text-emerald-900"
+                              : "bg-emerald-800 text-white"
+                          }`}
+                        >
+                          {lineApproved
+                            ? "Line approved ✓ (tap to undo)"
+                            : "Approve this line"}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </dl>
               )}
@@ -457,7 +515,7 @@ export function OrderForm({
 
       <div className="fixed inset-x-0 bottom-0 border-t border-zinc-200 bg-white/95 p-4 backdrop-blur">
         <div className="mx-auto flex max-w-lg gap-2">
-          {hasBlocked && !approvalId && (
+          {hasBlocked && !approvalId && profile.role !== "owner" && (
             <button
               type="button"
               onClick={() => startTransition(() => requestApproval())}
@@ -470,7 +528,7 @@ export function OrderForm({
           <button
             type="button"
             onClick={saveOrder}
-            disabled={pending || (hasBlocked && !approvalId)}
+            disabled={pending || blockedUnresolved}
             className="flex-1 rounded-lg bg-emerald-700 px-3 py-3 text-sm font-semibold text-white disabled:opacity-40"
           >
             {pending ? "Saving…" : "Save order"}

@@ -58,6 +58,10 @@ const migration = readFileSync(
   resolve("supabase/migrations/20260323100000_trial_order_schema.sql"),
   "utf8",
 );
+const migration2 = readFileSync(
+  resolve("supabase/migrations/20260323110000_day_rate_and_inline_approval.sql"),
+  "utf8",
+);
 const seed = readFileSync(resolve("supabase/seed.sql"), "utf8");
 
 const client = new pg.Client({
@@ -66,13 +70,14 @@ const client = new pg.Client({
 });
 
 await client.connect();
-console.log("Connected. Applying additive shamsy_* migration (no drops of RN tables)...");
+console.log("Connected. Applying additive shamsy_* migrations...");
 await client.query("begin");
 try {
   await client.query(migration);
+  await client.query(migration2);
   await client.query(seed);
   await client.query("commit");
-  console.log("Migration + seed applied.");
+  console.log("Migrations + seed applied.");
 } catch (err) {
   await client.query("rollback");
   console.error("Failed, rolled back:", err.message);

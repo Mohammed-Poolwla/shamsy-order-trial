@@ -63,6 +63,7 @@ export type DiscountApproval = {
       quantity: number;
       discount_cents: number;
       needs_approval: boolean;
+      line_approved?: boolean;
     }>;
   };
   status: "pending" | "approved" | "rejected" | "consumed";

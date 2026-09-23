@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "verify:money": "node scripts/verify-money.mjs",
+    "test:acceptance": "node scripts/acceptance.mjs",
     "seed": "node scripts/seed-users.mjs",
     "db:apply": "node scripts/apply-migration.mjs",
     "db:push": "npx supabase db push",
