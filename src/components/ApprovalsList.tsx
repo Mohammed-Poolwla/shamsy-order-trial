@@ -7,7 +7,8 @@ import {
   formatBps,
   formatSdg,
   formatUsdFromCents,
-  lineBand,
+  lineDisplayBand,
+  lineDisplayLabel,
 } from "@/lib/money";
 import type { Order, OrderLine, Product, Profile } from "@/lib/types";
 
@@ -52,7 +53,7 @@ export function ApprovalsList({
         return;
       }
       setInfo(
-        "Line approved. Order leaves Approvals — adviser (or you on the order page) can Save as order.",
+        "Line unblocked (green). Order leaves Approvals — open Drafts/Orders and Save as order.",
       );
       router.refresh();
     });
@@ -156,38 +157,43 @@ export function ApprovalsList({
                 {displayLines.map((line) => {
                   const p =
                     productMap.get(line.product_id) ?? line.shamsy_products;
-                  const band = lineBand(line.discount_bps);
+                  const display = lineDisplayBand(
+                    line.discount_bps,
+                    line.approval,
+                  );
                   const waiting = line.approval === "required";
                   const approved = line.approval === "approved";
                   return (
                     <li
                       key={line.id}
-                      className={`rounded-lg border p-2 space-y-1 ${
+                      className={`rounded-lg border-2 p-2 space-y-1 ${
                         waiting
-                          ? "border-red-400 bg-red-50"
+                          ? "band-blocked"
                           : approved
-                            ? "border-emerald-400 bg-emerald-50"
-                            : "border-zinc-200"
+                            ? "band-unblocked"
+                            : "border-zinc-200 bg-white text-zinc-800"
                       }`}
                     >
-                      <div className="flex justify-between gap-2 font-medium text-zinc-800">
+                      <div className="flex justify-between gap-2 font-medium">
                         <span>
                           {p?.name ?? "Product"} × {line.quantity}
                         </span>
-                        <span className="tabular-nums">
-                          {formatUsdFromCents(line.line_total_cents)}
+                        <span
+                          className={`band-badge band-badge-${display} shrink-0`}
+                        >
+                          {lineDisplayLabel(display)}
                         </span>
                       </div>
-                      <div className="flex justify-between text-[11px] text-zinc-600">
+                      <div className="flex justify-between text-[11px] opacity-90">
                         <span>
                           disc {formatUsdFromCents(line.discount_cents)} ·{" "}
-                          {formatBps(line.discount_bps)} · {band}
+                          {formatBps(line.discount_bps)}
                         </span>
                         <span className="font-semibold uppercase">
                           {waiting
-                            ? "Needs approval"
+                            ? "Blocked"
                             : approved
-                              ? "Line approved"
+                              ? "Unblocked"
                               : "OK"}
                         </span>
                       </div>
@@ -196,7 +202,7 @@ export function ApprovalsList({
                           type="button"
                           disabled={pending}
                           onClick={() => approveLine(draft.id, line.id)}
-                          className="w-full rounded-md bg-emerald-800 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                          className="w-full rounded-md bg-white py-2 text-xs font-semibold text-red-950 disabled:opacity-50"
                         >
                           Approve this line
                         </button>

@@ -5,7 +5,9 @@ import {
   formatBps,
   formatSdg,
   formatUsdFromCents,
-  lineBand,
+  lineDisplayBand,
+  lineDisplayLabel,
+  type LineDisplayBand,
 } from "@/lib/money";
 import type { Order, OrderLine, Profile } from "@/lib/types";
 import {
@@ -13,7 +15,7 @@ import {
   FinalizeDraftButton,
 } from "@/components/DraftOrderActions";
 
-function bandClass(band: string) {
+function bandClass(band: LineDisplayBand) {
   switch (band) {
     case "sand":
       return "band-sand";
@@ -21,21 +23,19 @@ function bandClass(band: string) {
       return "band-red";
     case "blocked":
       return "band-blocked";
+    case "unblocked":
+      return "band-unblocked";
     default:
       return "band-none";
   }
 }
 
-function BandBadge({ band }: { band: string }) {
-  const label =
-    band === "sand"
-      ? "Sand ≤3%"
-      : band === "red"
-        ? "Red ≤5%"
-        : band === "blocked"
-          ? "Blocked >5%"
-          : "No discount";
-  return <span className={`band-badge band-badge-${band}`}>{label}</span>;
+function BandBadge({ band }: { band: LineDisplayBand }) {
+  return (
+    <span className={`band-badge band-badge-${band}`}>
+      {lineDisplayLabel(band)}
+    </span>
+  );
 }
 
 export default async function OrderDetailPage({
@@ -134,7 +134,7 @@ export default async function OrderDetailPage({
 
       <ul className="space-y-2">
         {orderLines.map((line) => {
-          const band = lineBand(line.discount_bps);
+          const band = lineDisplayBand(line.discount_bps, line.approval);
           return (
             <li
               key={line.id}
@@ -168,12 +168,12 @@ export default async function OrderDetailPage({
                 </div>
                 {line.approval === "required" && (
                   <p className="col-span-2 font-semibold">
-                    Needs owner approval — draft only
+                    Status: Blocked — needs owner approval
                   </p>
                 )}
                 {line.approval === "approved" && (
-                  <p className="col-span-2 font-medium">
-                    Owner approved (&gt;5%) — still draft until Save as order
+                  <p className="col-span-2 font-semibold">
+                    Status: Unblocked — ready to Save as order
                   </p>
                 )}
               </dl>

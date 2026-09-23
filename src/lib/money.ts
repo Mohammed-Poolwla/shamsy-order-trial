@@ -10,11 +10,39 @@ export function discountBps(discountCents: number, lineValueCents: number): numb
 
 export type DiscountBand = "none" | "sand" | "red" | "blocked";
 
+/** Visual status after owner approval of a >5% line. */
+export type LineDisplayBand = DiscountBand | "unblocked";
+
 export function lineBand(bps: number): DiscountBand {
   if (bps === 0) return "none";
   if (bps <= 300) return "sand"; // >0% up to 3%
   if (bps <= 500) return "red"; // >3% up to 5%
   return "blocked"; // >5%
+}
+
+/** Band for UI: approved blocked lines show as unblocked (green). */
+export function lineDisplayBand(
+  bps: number,
+  approval: "none" | "required" | "approved" = "none",
+): LineDisplayBand {
+  const band = lineBand(bps);
+  if (band === "blocked" && approval === "approved") return "unblocked";
+  return band;
+}
+
+export function lineDisplayLabel(band: LineDisplayBand): string {
+  switch (band) {
+    case "sand":
+      return "Sand ≤3%";
+    case "red":
+      return "Red ≤5%";
+    case "blocked":
+      return "Blocked >5%";
+    case "unblocked":
+      return "Unblocked";
+    default:
+      return "No discount";
+  }
 }
 
 export function formatUsdFromCents(cents: number): string {
