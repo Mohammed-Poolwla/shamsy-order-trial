@@ -43,7 +43,7 @@ export type OrderLine = {
   line_value_cents: number;
   line_total_cents: number;
   discount_bps: number;
-  approval: "none" | "required" | "approved";
+  approval: "none" | "required" | "approved" | "rejected";
   shamsy_products?: Product | null;
 };
 

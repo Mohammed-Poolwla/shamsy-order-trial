@@ -91,6 +91,15 @@ try {
     client,
     "supabase/migrations/20260323120001_draft_order_approval.sql",
   );
+  await runFile(
+    client,
+    "supabase/migrations/20260323130000_reject_line_enum.sql",
+    { inTx: false },
+  );
+  await runFile(
+    client,
+    "supabase/migrations/20260323130001_reject_and_revise_line.sql",
+  );
   await runFile(client, "supabase/seed.sql");
   console.log("Migrations + seed applied.");
 } catch (err) {

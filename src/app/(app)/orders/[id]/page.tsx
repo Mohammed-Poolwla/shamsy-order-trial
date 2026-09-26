@@ -13,6 +13,7 @@ import type { Order, OrderLine, Profile } from "@/lib/types";
 import {
   ApproveDraftLineButton,
   FinalizeDraftButton,
+  ReviseRejectedLine,
 } from "@/components/DraftOrderActions";
 
 function bandClass(band: LineDisplayBand) {
@@ -25,6 +26,8 @@ function bandClass(band: LineDisplayBand) {
       return "band-blocked";
     case "unblocked":
       return "band-unblocked";
+    case "rejected":
+      return "band-rejected";
     default:
       return "band-none";
   }
@@ -76,7 +79,8 @@ export default async function OrderDetailPage({
   const orderLines = (lines ?? []) as OrderLine[];
   const isDraft = o.status === "draft";
   const needsApproval = orderLines.some((l) => l.approval === "required");
-  const canFinalize = isDraft && !needsApproval;
+  const hasRejected = orderLines.some((l) => l.approval === "rejected");
+  const canFinalize = isDraft && !needsApproval && !hasRejected;
   const isOwner = (profile as Profile | null)?.role === "owner";
 
   return (
@@ -129,7 +133,11 @@ export default async function OrderDetailPage({
       </section>
 
       {isDraft && (
-        <FinalizeDraftButton orderId={o.id} canFinalize={canFinalize} />
+        <FinalizeDraftButton
+          orderId={o.id}
+          canFinalize={canFinalize}
+          hasRejected={hasRejected}
+        />
       )}
 
       <ul className="space-y-2">
@@ -176,12 +184,24 @@ export default async function OrderDetailPage({
                     Status: Unblocked — ready to Save as order
                   </p>
                 )}
+                {line.approval === "rejected" && (
+                  <p className="col-span-2 font-semibold">
+                    Status: Rejected — update discount and send again
+                  </p>
+                )}
               </dl>
               {isDraft && line.approval === "required" && (
                 <ApproveDraftLineButton
                   orderId={o.id}
                   lineId={line.id}
                   isOwner={isOwner}
+                />
+              )}
+              {isDraft && line.approval === "rejected" && (
+                <ReviseRejectedLine
+                  orderId={o.id}
+                  lineId={line.id}
+                  discountCents={line.discount_cents}
                 />
               )}
             </li>

@@ -37,6 +37,9 @@ export function ApprovalsList({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [reviseDiscount, setReviseDiscount] = useState<Record<string, string>>(
+    {},
+  );
   const productMap = new Map(products.map((p) => [p.id, p]));
   const isOwnerApprovals = mode === "approvals";
 
@@ -54,6 +57,61 @@ export function ApprovalsList({
       }
       setInfo(
         "Line unblocked (green). Order leaves Approvals — open Drafts/Orders and Save as order.",
+      );
+      router.refresh();
+    });
+  }
+
+  function rejectLine(orderId: string, lineId: string) {
+    setError(null);
+    setInfo(null);
+    startTransition(async () => {
+      const { error: rpcError } = await supabase.rpc(
+        "shamsy_reject_draft_line",
+        { p_order_id: orderId, p_line_id: lineId },
+      );
+      if (rpcError) {
+        setError(rpcError.message);
+        return;
+      }
+      setInfo(
+        "Line rejected. Adviser can change the discount and send it again for approval.",
+      );
+      router.refresh();
+    });
+  }
+
+  function reviseLine(orderId: string, line: OrderLine) {
+    setError(null);
+    setInfo(null);
+    const raw =
+      reviseDiscount[line.id] ??
+      (line.discount_cents / 100).toFixed(
+        line.discount_cents % 100 === 0 ? 0 : 2,
+      );
+    const dollars = Number(raw);
+    if (!Number.isFinite(dollars) || dollars < 0) {
+      setError("Enter a valid discount in dollars.");
+      return;
+    }
+    const discountCents = Math.round(dollars * 100);
+    startTransition(async () => {
+      const { error: rpcError } = await supabase.rpc(
+        "shamsy_revise_draft_line",
+        {
+          p_order_id: orderId,
+          p_line_id: line.id,
+          p_discount_cents: discountCents,
+        },
+      );
+      if (rpcError) {
+        setError(rpcError.message);
+        return;
+      }
+      setInfo(
+        Math.floor((discountCents * 10000) / line.line_value_cents) > 500
+          ? "Updated and sent again for owner approval."
+          : "Updated. Discount is now ≤5% — no owner approval needed.",
       );
       router.refresh();
     });
@@ -86,14 +144,15 @@ export function ApprovalsList({
         <p className="text-sm text-zinc-600">
           {isOwnerApprovals ? (
             <>
-              Only drafts with a &gt;5% line waiting for your approval. After you
-              approve, the draft leaves this list — finalize from Orders or the
-              adviser&apos;s Drafts.
+              Only drafts with a &gt;5% line waiting for your approval. Approve
+              or reject each line. Rejected lines go back to the adviser to
+              revise and resubmit.
             </>
           ) : (
             <>
-              Your draft orders. Owner must approve blocked (&gt;5%) lines first;
-              then tap <strong>Save as order</strong>.
+              Your draft orders. Owner must approve blocked (&gt;5%) lines
+              first; if rejected, update the discount and send again. Then tap{" "}
+              <strong>Save as order</strong>.
             </>
           )}
         </p>
@@ -128,8 +187,8 @@ export function ApprovalsList({
         {drafts.map((draft) => {
           const lines = draft.shamsy_order_lines ?? [];
           const needs = lines.filter((l) => l.approval === "required");
-          const readyToSave = needs.length === 0;
-          // Owner Approvals: focus on lines that still need approval
+          const rejected = lines.filter((l) => l.approval === "rejected");
+          const readyToSave = needs.length === 0 && rejected.length === 0;
           const displayLines = isOwnerApprovals
             ? lines.filter(
                 (l) => l.approval === "required" || l.approval === "approved",
@@ -146,10 +205,20 @@ export function ApprovalsList({
                   {draft.shamsy_customers?.name ?? "Dealer"} ·{" "}
                   {draft.exchange_rate.toLocaleString()} SDG/$
                 </span>
-                <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-900">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                    rejected.length > 0
+                      ? "bg-amber-100 text-amber-900"
+                      : isOwnerApprovals
+                        ? "bg-red-100 text-red-900"
+                        : "bg-zinc-100 text-zinc-700"
+                  }`}
+                >
                   {isOwnerApprovals
                     ? `${needs.length} need approval`
-                    : "Draft"}
+                    : rejected.length > 0
+                      ? `${rejected.length} rejected`
+                      : "Draft"}
                 </span>
               </div>
 
@@ -163,6 +232,12 @@ export function ApprovalsList({
                   );
                   const waiting = line.approval === "required";
                   const approved = line.approval === "approved";
+                  const wasRejected = line.approval === "rejected";
+                  const discountInput =
+                    reviseDiscount[line.id] ??
+                    (line.discount_cents / 100).toFixed(
+                      line.discount_cents % 100 === 0 ? 0 : 2,
+                    );
                   return (
                     <li
                       key={line.id}
@@ -171,7 +246,9 @@ export function ApprovalsList({
                           ? "band-blocked"
                           : approved
                             ? "band-unblocked"
-                            : "border-zinc-200 bg-white text-zinc-800"
+                            : wasRejected
+                              ? "band-rejected"
+                              : "border-zinc-200 bg-white text-zinc-800"
                       }`}
                     >
                       <div className="flex justify-between gap-2 font-medium">
@@ -194,18 +271,63 @@ export function ApprovalsList({
                             ? "Blocked"
                             : approved
                               ? "Unblocked"
-                              : "OK"}
+                              : wasRejected
+                                ? "Rejected"
+                                : "OK"}
                         </span>
                       </div>
                       {profile.role === "owner" && waiting && (
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => approveLine(draft.id, line.id)}
-                          className="w-full rounded-md bg-white py-2 text-xs font-semibold text-red-950 disabled:opacity-50"
-                        >
-                          Approve this line
-                        </button>
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => approveLine(draft.id, line.id)}
+                            className="rounded-md bg-white py-2 text-xs font-semibold text-red-950 disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => rejectLine(draft.id, line.id)}
+                            className="rounded-md border border-white/60 bg-black/20 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                      {!isOwnerApprovals && wasRejected && (
+                        <div className="space-y-2 pt-1">
+                          <label className="block space-y-1">
+                            <span className="text-[11px] font-medium">
+                              New discount (USD)
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              inputMode="decimal"
+                              value={discountInput}
+                              onChange={(e) =>
+                                setReviseDiscount((prev) => ({
+                                  ...prev,
+                                  [line.id]: e.target.value,
+                                }))
+                              }
+                              className="w-full rounded-md border border-amber-300 bg-white px-2 py-2 text-sm text-zinc-900"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => reviseLine(draft.id, line)}
+                            className="w-full rounded-md bg-amber-800 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                          >
+                            {pending
+                              ? "Sending…"
+                              : "Update & send again for approval"}
+                          </button>
+                        </div>
                       )}
                     </li>
                   );
@@ -229,8 +351,8 @@ export function ApprovalsList({
 
               {isOwnerApprovals ? (
                 <p className="text-center text-xs text-zinc-500">
-                  Approve blocked line(s) above. This order stays a draft until
-                  someone taps Save as order.
+                  Approve or reject blocked line(s). Rejected drafts leave this
+                  list until the adviser resubmits.
                 </p>
               ) : readyToSave ? (
                 <button
@@ -241,6 +363,11 @@ export function ApprovalsList({
                 >
                   {pending ? "Saving…" : "Save as order"}
                 </button>
+              ) : rejected.length > 0 ? (
+                <p className="text-center text-xs text-amber-800">
+                  Owner rejected {rejected.length} line(s). Update the discount
+                  and send again.
+                </p>
               ) : (
                 <p className="text-center text-xs text-zinc-500">
                   Waiting for owner to approve blocked line(s).
