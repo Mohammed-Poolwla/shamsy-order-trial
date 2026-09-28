@@ -154,6 +154,67 @@ async function serverChecks() {
   });
   assert(!!insertError, `RLS blocks direct order insert`);
 
+  const { data: drafts } = await adviser
+    .from("shamsy_orders")
+    .select("id")
+    .eq("status", "draft")
+    .limit(1);
+  let draftId = drafts?.[0]?.id;
+  let createdDraft = false;
+  if (!draftId) {
+    const { data, error } = await adviser.rpc("shamsy_create_draft_order", {
+      p_customer_id: customerId,
+      p_exchange_rate: 8200,
+      p_lines: [{ product_id: hope16.id, quantity: 1, discount_cents: 15000 }],
+    });
+    assert(!error && !!data, `adviser can save >5% as draft (${error?.message ?? "ok"})`);
+    draftId = data;
+    createdDraft = true;
+  }
+
+  if (draftId) {
+    const { data: patched } = await adviser
+      .from("shamsy_orders")
+      .update({ status: "saved" })
+      .eq("id", draftId)
+      .select("id");
+    const { data: after } = await adviser
+      .from("shamsy_orders")
+      .select("status")
+      .eq("id", draftId)
+      .single();
+    assert(
+      (patched ?? []).length === 0 && after?.status === "draft",
+      "RLS blocks PATCH draft → saved",
+    );
+
+    const { data: patchedLines } = await adviser
+      .from("shamsy_order_lines")
+      .update({ approval: "approved" })
+      .eq("order_id", draftId)
+      .select("id");
+    assert((patchedLines ?? []).length === 0, "RLS blocks direct line approval");
+
+    if (createdDraft) {
+      const { error: finalizeError } = await adviser.rpc("shamsy_finalize_draft_order", {
+        p_order_id: draftId,
+      });
+      assert(
+        !!finalizeError && /SAVE_BLOCKED/.test(finalizeError.message),
+        `finalize blocks unapproved >5% draft (${finalizeError?.message ?? "no error"})`,
+      );
+    }
+  }
+
+  const { error: forgeError } = await adviser.from("shamsy_discount_approvals").insert({
+    requested_by: userId,
+    customer_id: customerId,
+    exchange_rate: 8200,
+    status: "approved",
+    payload: { lines: [{ product_id: hope16.id, needs_approval: true }] },
+  });
+  assert(!!forgeError, "RLS blocks self-approved approval request");
+
   await adviser.auth.signOut();
 }
 

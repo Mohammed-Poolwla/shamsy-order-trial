@@ -100,6 +100,10 @@ try {
     client,
     "supabase/migrations/20260323130001_reject_and_revise_line.sql",
   );
+  await runFile(
+    client,
+    "supabase/migrations/20260323140000_harden_discount_guards.sql",
+  );
   await runFile(client, "supabase/seed.sql");
   console.log("Migrations + seed applied.");
 } catch (err) {
