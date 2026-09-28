@@ -96,6 +96,38 @@ Env vars set on Vercel: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_K
 npm run test:acceptance   # PDF arithmetic + server 5% block
 ```
 
+## Proof: 7.25% without approval is refused by the server
+
+`bash scripts/prove-5pct-block.sh` logs in as the adviser and calls the Supabase API directly with cURL (no UI), trying every way to save the 7.25% Hope 16.0LM-A1 line without owner approval:
+
+| # | Direct call | Server response |
+|---|---|---|
+| 1 | `POST /rest/v1/rpc/shamsy_create_order` | 400 `SAVE_BLOCKED` |
+| 2 | same, claiming owner inline approval | 400 `Only owner can pass inline line approvals` |
+| 3 | same, with a made-up approval id | 400 `Approval request not found` |
+| 4 | `POST /rest/v1/shamsy_discount_approvals` with `status=approved` | 403 row-level security |
+| 5 | `POST /rest/v1/shamsy_orders` (saved order) | 403 row-level security |
+| 6 | `POST /rest/v1/shamsy_order_lines` (7.25% line marked approved) | 403 row-level security |
+| 7 | `PATCH /rest/v1/shamsy_orders` draft → `saved` | 0 rows changed, stays draft |
+| 8 | `PATCH /rest/v1/shamsy_order_lines` → `approved` | 0 rows changed |
+| 9 | `POST /rest/v1/rpc/shamsy_finalize_draft_order` | 400 `SAVE_BLOCKED` |
+
+It then checks the adviser's saved-order count is unchanged. Behind these, the database itself rejects any line over 5% stored with no approval (CHECK constraint) and any saved order containing an unapproved line (trigger) — see `supabase/migrations/20260323140000_harden_discount_guards.sql`.
+
+The single call a reviewer would make:
+
+```bash
+TOKEN=$(curl -s "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+  -H "apikey: $ANON" -H "Content-Type: application/json" \
+  -d '{"email":"adviser@shamsy.trial","password":"trial-adviser-123"}' | jq -r .access_token)
+
+curl -s "$SUPABASE_URL/rest/v1/rpc/shamsy_create_order" \
+  -H "apikey: $ANON" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"p_customer_id":"<customer id>","p_exchange_rate":8200,
+       "p_lines":[{"product_id":"<HOPE-16.0LM-A1 id>","quantity":1,"discount_cents":15000}]}'
+# → 400 {"code":"P0001","message":"SAVE_BLOCKED: one or more lines exceed 5% discount without owner approval"}
+```
+
 ## Repo layout
 
 ```
